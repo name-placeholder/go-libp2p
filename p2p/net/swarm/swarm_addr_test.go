@@ -2,14 +2,24 @@ package swarm_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
+	"github.com/libp2p/go-libp2p/p2p/net/swarm"
 	swarmt "github.com/libp2p/go-libp2p/p2p/net/swarm/testing"
+	circuitv2 "github.com/libp2p/go-libp2p/p2p/protocol/circuitv2/client"
+	quic "github.com/libp2p/go-libp2p/p2p/transport/quic"
+	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
 
 	"github.com/libp2p/go-libp2p-core/peerstore"
 	"github.com/libp2p/go-libp2p-core/test"
 
+	tnet "github.com/libp2p/go-libp2p-testing/net"
+	webtransport "github.com/marten-seemann/go-libp2p-webtransport"
+	"github.com/minio/sha256-simd"
 	ma "github.com/multiformats/go-multiaddr"
+	"github.com/multiformats/go-multibase"
+	"github.com/multiformats/go-multihash"
 	"github.com/stretchr/testify/require"
 )
 
@@ -56,4 +66,35 @@ func TestAddressesWithoutListening(t *testing.T) {
 	a1, err := s.InterfaceListenAddresses()
 	require.NoError(t, err)
 	require.Empty(t, a1, "expected to be listening on no addresses")
+}
+
+func TestDialAddressSelection(t *testing.T) {
+	id := tnet.RandIdentityOrFatal(t)
+	s, err := swarm.NewSwarm("local", nil)
+	require.NoError(t, err)
+
+	tcpTr, err := tcp.NewTCPTransport(nil, nil)
+	require.NoError(t, err)
+	require.NoError(t, s.AddTransport(tcpTr))
+	quicTr, err := quic.NewTransport(id.PrivateKey(), nil, nil, nil)
+	require.NoError(t, err)
+	require.NoError(t, s.AddTransport(quicTr))
+	webtransportTr, err := webtransport.New(id.PrivateKey(), nil, nil)
+	require.NoError(t, err)
+	require.NoError(t, s.AddTransport(webtransportTr))
+	h := sha256.Sum256([]byte("foo"))
+	hash, err := multihash.Encode(h[:], multihash.SHA2_256)
+	require.NoError(t, err)
+	certHash, err := multibase.Encode(multibase.Base58BTC, hash)
+	require.NoError(t, err)
+	circuitTr, err := circuitv2.New(nil, nil)
+	require.NoError(t, err)
+	require.NoError(t, s.AddTransport(circuitTr))
+
+	require.Equal(t, tcpTr, s.TransportForDialing(ma.StringCast("/ip4/127.0.0.1/tcp/1234")))
+	require.Equal(t, quicTr, s.TransportForDialing(ma.StringCast("/ip4/127.0.0.1/udp/1234/quic")))
+	require.Equal(t, circuitTr, s.TransportForDialing(ma.StringCast(fmt.Sprintf("/ip4/127.0.0.1/udp/1234/quic/p2p-circuit/p2p/%s", id.ID()))))
+	require.Equal(t, webtransportTr, s.TransportForDialing(ma.StringCast(fmt.Sprintf("/ip4/127.0.0.1/udp/1234/quic/webtransport/certhash/%s", certHash))))
+	require.Nil(t, s.TransportForDialing(ma.StringCast("/ip4/1.2.3.4")))
+	require.Nil(t, s.TransportForDialing(ma.StringCast("/ip4/1.2.3.4/tcp/443/ws")))
 }
