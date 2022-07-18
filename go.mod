@@ -48,6 +48,8 @@ require (
 	golang.org/x/sys v0.0.0-20220520151302-bc2c85ada10a
 )
 
+replace github.com/flynn/noise => github.com/name-placeholder/noise v1.0.1-0.20220718180751-beab3a060888
+
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/btcsuite/btcd/btcec/v2 v2.2.0 // indirect
