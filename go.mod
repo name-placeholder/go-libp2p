@@ -59,3 +59,5 @@ require (
 	google.golang.org/grpc v1.40.0 // indirect
 	google.golang.org/protobuf v1.27.1 // indirect
 )
+
+replace github.com/libp2p/go-libp2p-noise => github.com/name-placeholder/go-libp2p-noise v0.2.3-0.20220719145320-38b55680e11d
